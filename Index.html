@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hindi to Roman Urdu Converter</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f1eb;color:#28231f;font:16px system-ui,Arial;display:grid;place-items:center;min-height:100vh;padding:18px}.app{width:min(760px,100%);background:#fff;border:1px solid #e7ded4;border-radius:22px;padding:24px;box-shadow:0 12px 35px #33221412}h1{margin:0 0 8px;font-size:clamp(25px,5vw,36px)}p{color:#70665d;line-height:1.5;margin:0 0 20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}label{display:block;font-weight:650;margin-bottom:8px}textarea{width:100%;min-height:220px;resize:vertical;border:1px solid #ded5cb;border-radius:13px;padding:14px;font:17px/1.6 system-ui;background:#fffdfb;color:#28231f}textarea:focus{outline:2px solid #a47c5b;border-color:transparent}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}button{border:0;border-radius:11px;padding:12px 18px;font-weight:700;font-size:15px;cursor:pointer;background:#49372a;color:white}button.secondary{background:#eee7df;color:#49372a}button:disabled{opacity:.55;cursor:wait}.note{font-size:13px;color:#85796e;margin-top:12px}.status{min-height:24px;color:#72543b;font-size:14px}@media(max-width:620px){.grid{grid-template-columns:1fr}textarea{min-height:160px}.app{padding:18px}}
+</style>
+</head>
+<body>
+<main class="app">
+<h1>Hindi → Roman Urdu</h1>
+<p>Hindi text ko Urdu meaning mein translate karein aur English letters mein Roman Urdu hasil karein.</p>
+<div class="grid">
+<section><label for="source">Hindi text</label><textarea id="source" placeholder="Yahan Hindi text paste karein…"></textarea></section>
+<section><label for="result">Roman Urdu</label><textarea id="result" placeholder="Roman Urdu translation yahan ayegi…" readonly></textarea></section>
+</div>
+<div class="actions"><button id="convert">Convert</button><button class="secondary" id="copy">Copy result</button><button class="secondary" id="clear">Clear</button></div>
+<div class="status" id="status" role="status"></div>
+<p class="note">Translation internet par MyMemory translation service ke zariye hoti hai. Service ki free usage limits ho sakti hain. Text ko censor ya asterisk se replace karne ka filter is page mein nahi hai.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+// Urdu-script to Roman Urdu character mapping. Contextual spellings may vary.
+const map={
+'ا':'a','آ':'aa','ب':'b','پ':'p','ت':'t','ٹ':'ṭ','ث':'s','ج':'j','چ':'ch','ح':'h','خ':'kh','د':'d','ڈ':'ḍ','ذ':'z','ر':'r','ڑ':'ṛ','ز':'z','ژ':'zh','س':'s','ش':'sh','ص':'s','ض':'z','ط':'t','ظ':'z','ع':'a','غ':'gh','ف':'f','ق':'q','ک':'k','گ':'g','ل':'l','م':'m','ن':'n','ں':'n','و':'w','ہ':'h','ھ':'h','ء':'','ئ':'y','ی':'i','ے':'e','ؤ':'o','ۃ':'h','چ':'ch','۔':'.','،':',','؟':'?','؛':';','٪':'%','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'
+};
+function romanize(text){return [...text].map(ch=>map[ch]??ch).join('').replace(/\s+/g,' ').trim();}
+$('convert').addEventListener('click',async()=>{
+ const text=$('source').value.trim(); if(!text){$('status').textContent='Pehle Hindi text likhein ya paste karein.';return;}
+ const btn=$('convert');btn.disabled=true;$('status').textContent='Translation ho rahi hai…';$('result').value='';
+ try{
+  const url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(text)+'&langpair=hi|ur';
+  const response=await fetch(url);if(!response.ok)throw new Error('Translation service se response nahi mila.');
+  const data=await response.json();const translated=data?.responseData?.translatedText;
+  if(!translated)throw new Error('Translation available nahi hui.');
+  // Decode HTML entities that some translation responses may include.
+  const decoded=new DOMParser().parseFromString(translated,'text/html').documentElement.textContent;
+  $('result').value=romanize(decoded);
+  $('status').textContent='Convert ho gaya. Roman Urdu spelling context ke mutabiq thori different ho sakti hai.';
+ }catch(e){$('status').textContent='Error: '+e.message+' Internet check karein aur dobara try karein.';}
+ finally{btn.disabled=false;}
+});
+$('copy').addEventListener('click',async()=>{const val=$('result').value;if(!val){$('status').textContent='Copy karne ke liye result nahi hai.';return;}try{await navigator.clipboard.writeText(val);$('status').textContent='Roman Urdu copy ho gaya.';}catch{$('result').select();document.execCommand('copy');$('status').textContent='Result copy karne ki koshish ki gayi.';}});
+$('clear').addEventListener('click',()=>{$('source').value='';$('result').value='';$('status').textContent='';});
+</script>
+</body>
+</html>
