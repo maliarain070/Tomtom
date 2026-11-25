@@ -26,19 +26,57 @@ const map={
 'ا':'a','آ':'aa','ب':'b','پ':'p','ت':'t','ٹ':'ṭ','ث':'s','ج':'j','چ':'ch','ح':'h','خ':'kh','د':'d','ڈ':'ḍ','ذ':'z','ر':'r','ڑ':'ṛ','ز':'z','ژ':'zh','س':'s','ش':'sh','ص':'s','ض':'z','ط':'t','ظ':'z','ع':'a','غ':'gh','ف':'f','ق':'q','ک':'k','گ':'g','ل':'l','م':'m','ن':'n','ں':'n','و':'w','ہ':'h','ھ':'h','ء':'','ئ':'y','ی':'i','ے':'e','ؤ':'o','ۃ':'h','چ':'ch','۔':'.','،':',','؟':'?','؛':';','٪':'%','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'
 };
 function romanize(text){return [...text].map(ch=>map[ch]??ch).join('').replace(/\s+/g,' ').trim();}
+// Split long text into manageable chunks, preferring paragraph/sentence boundaries.
+function splitText(text, maxLen=420){
+ const chunks=[];
+ const paragraphs=text.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+ for(const para of paragraphs){
+  if(para.length<=maxLen){chunks.push(para);continue;}
+  const sentences=para.match(/[^.!?।]+[.!?।]?/g)||[para];
+  let current='';
+  for(let sentence of sentences){
+   sentence=sentence.trim(); if(!sentence)continue;
+   if(sentence.length>maxLen){
+    if(current){chunks.push(current);current='';}
+    let words=sentence.split(/\s+/),part='';
+    for(const word of words){
+     if((part+' '+word).trim().length>maxLen){if(part)chunks.push(part);part=word;}
+     else part=(part+' '+word).trim();
+    }
+    if(part)chunks.push(part);
+   }else if((current+' '+sentence).trim().length>maxLen){
+    if(current)chunks.push(current);current=sentence;
+   }else current=(current+' '+sentence).trim();
+  }
+  if(current)chunks.push(current);
+ }
+ return chunks;
+}
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function translateChunk(text){
+ const url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(text)+'&langpair=hi|ur';
+ const response=await fetch(url);
+ if(!response.ok)throw new Error('Translation service error ('+response.status+').');
+ const data=await response.json();
+ if(data.responseStatus && Number(data.responseStatus)!==200)throw new Error(data.responseDetails||'Translation service ne request reject ki.');
+ const translated=data?.responseData?.translatedText;
+ if(!translated)throw new Error('Translation available nahi hui.');
+ return new DOMParser().parseFromString(translated,'text/html').documentElement.textContent;
+}
 $('convert').addEventListener('click',async()=>{
  const text=$('source').value.trim(); if(!text){$('status').textContent='Pehle Hindi text likhein ya paste karein.';return;}
- const btn=$('convert');btn.disabled=true;$('status').textContent='Translation ho rahi hai…';$('result').value='';
+ const btn=$('convert');btn.disabled=true;$('status').textContent='Text ko parts mein convert kiya ja raha hai…';$('result').value='';
  try{
-  const url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(text)+'&langpair=hi|ur';
-  const response=await fetch(url);if(!response.ok)throw new Error('Translation service se response nahi mila.');
-  const data=await response.json();const translated=data?.responseData?.translatedText;
-  if(!translated)throw new Error('Translation available nahi hui.');
-  // Decode HTML entities that some translation responses may include.
-  const decoded=new DOMParser().parseFromString(translated,'text/html').documentElement.textContent;
-  $('result').value=romanize(decoded);
-  $('status').textContent='Convert ho gaya. Roman Urdu spelling context ke mutabiq thori different ho sakti hai.';
- }catch(e){$('status').textContent='Error: '+e.message+' Internet check karein aur dobara try karein.';}
+  const chunks=splitText(text);
+  const results=[];
+  for(let i=0;i<chunks.length;i++){
+   $('status').textContent='Converting part '+(i+1)+' / '+chunks.length+'…';
+   results.push(await translateChunk(chunks[i]));
+   if(i<chunks.length-1)await sleep(350);
+  }
+  $('result').value=romanize(results.join(' '));
+  $('status').textContent='Convert ho gaya ('+chunks.length+' parts). Roman Urdu spelling context ke mutabiq thori different ho sakti hai.';
+ }catch(e){$('status').textContent='Error: '+e.message+' Agar lamba text hai to thora kam karke try karein; free service ki daily/request limit bhi ho sakti hai.';}
  finally{btn.disabled=false;}
 });
 $('copy').addEventListener('click',async()=>{const val=$('result').value;if(!val){$('status').textContent='Copy karne ke liye result nahi hai.';return;}try{await navigator.clipboard.writeText(val);$('status').textContent='Roman Urdu copy ho gaya.';}catch{$('result').select();document.execCommand('copy');$('status').textContent='Result copy karne ki koshish ki gayi.';}});
